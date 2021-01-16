@@ -134,20 +134,19 @@ class TopicClient(TopicConnection):
         TopicConnection.__init__(self, address)
         self.task = None
         self.ws = None
+        self.ready = asyncio.Event()
 
     @debug
     async def connect(self):
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.address) as ws:
-
-                logger.debug("A")
-
+                self.ready.set()
                 self.ws = ws
+
                 await self.connection(ws)
 
-                logger.debug("B")
-
                 async for msg in ws:
+
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         if not await self.processing(ws, msg):
                             await ws.close()
@@ -168,6 +167,7 @@ class TopicClient(TopicConnection):
     @debug
     async def start(self):
         self.task = asyncio.create_task(self.connect())
+        await self.ready.wait()
 
     @debug
     async def stop(self):
@@ -197,7 +197,7 @@ class TopicServer(TopicConnection):
     async def start(self):
         o = urlparse(self.address)
         app = web.Application()
-        app['websockets'] = weakref.WeakSet()
+        app["websockets"] = weakref.WeakSet()
         app.add_routes(
             [web.get("/", self.handler), web.get("/{group}", self.handler)]
         )
@@ -219,7 +219,7 @@ class TopicServer(TopicConnection):
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        request.app['websockets'].add(ws)
+        request.app["websockets"].add(ws)
 
         await self.connection(ws, group)
 
