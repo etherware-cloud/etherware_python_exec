@@ -4,77 +4,99 @@
 #
 
 from urllib.parse import urlparse
-from etherware.exec.logging import logger
+from etherware.exec.logging import logger, debug
 import asyncio
 import aiohttp
-from aiohttp import web
+import weakref
+from aiohttp import web, WSCloseCode
+from .topic_queue import TopicQueue
 
 
-class TopicConnection:
-    def __init__(self, websocket_response, group):
-        self.ws = websocket_response
-        self.group = group
+CLOSE_SIGNAL = "-close-"
+READY_SIGNAL = "-ready-"
 
 
 class TopicProcessor:
-    def __init__(self, topic_name):
+    @debug
+    def __init__(self, storage, topic_name):
         self.topic_name = topic_name
+        self.queue = TopicQueue(storage)
 
-    async def connection(self, tc: TopicConnection):
+    async def connection(self, ws, group):
         raise NotImplementedError
 
-    async def processing(self, tc: TopicConnection, msg):
+    async def processing(self, ws, msg, group):
         raise NotImplementedError
 
-    async def disconnection(self, tc: TopicConnection):
+    async def disconnection(self, ws):
         raise NotImplementedError
+
+    @debug
+    def setup(self):
+        self.queue.setup()
+
+    def __str__(self):
+        return (
+            f"<{self.__class__.__name__}[0x{id(self):x}] "
+            f"topic_name={self.topic_name} "
+            f"queue={self.queue} >"
+        )
 
 
 class WriteableTopic(TopicProcessor):
-    def __init__(self, topic_name):
-        super().__init__(topic_name)
-        self.queue = asyncio.Queue()
+    @debug
+    def __init__(self, *args, **kwargs):
+        TopicProcessor.__init__(self, *args, **kwargs)
+        self.setup()
 
-    async def connection(self, ws):
-        logger.debug(f"Connected to writeable of {self.topic_name}")
-        answer = await self.queue.get()
-        await ws.send_str(answer)
+    @debug
+    async def connection(self, ws, group=None):
+        pass
 
-    async def processing(self, ws, msg):
-        if msg.data == "close":
+    @debug
+    async def processing(self, ws, msg, group=None):
+        if msg.data == CLOSE_SIGNAL:
             return False
-        elif msg.data == "ready":
+        elif msg.data == READY_SIGNAL:
             while True:
                 try:
                     answer = await asyncio.wait_for(
-                        self.queue.get(), timeout=0.2
+                        self.queue.get(group), timeout=1
                     )
                 except asyncio.TimeoutError:
+                    logger.info("Writeable TIMEOUT")
                     if ws.closed:
+                        logger.info("Writeable Closed")
                         return False
+                    logger.info("Writeable not closed is a server")
                 else:
                     await ws.send_str(answer)
                     return True
 
+    @debug
     async def disconnection(self, ws):
-        logger.debug(f"Disconnected from writeable of {self.topic_name}")
+        pass
 
+    @debug
     async def put(self, message):
         await self.queue.put(message)
 
 
 class RedeableTopic(TopicProcessor):
-    def __init__(self, topic_name):
-        super().__init__(topic_name)
-        self.queue = asyncio.Queue()
+    @debug
+    def __init__(self, *args, **kwargs):
+        TopicProcessor.__init__(self, *args, **kwargs)
 
-    async def connection(self, ws):
-        logger.debug(f"Connected to readeable of {self.topic_name}.")
+    @debug
+    async def connection(self, ws, group=None):
+        await ws.send_str(READY_SIGNAL)
+        logger.debug("Ready Signal sended")
 
-    async def processing(self, ws, msg):
+    @debug
+    async def processing(self, ws, msg, group=None):
         if msg.type == aiohttp.WSMsgType.TEXT:
             await self.queue.put(msg.data)
-            await ws.send_str("ready")
+            await ws.send_str(READY_SIGNAL)
             return True
         elif msg.type == aiohttp.WSMsgType.ERROR:
             logger.error(
@@ -83,16 +105,19 @@ class RedeableTopic(TopicProcessor):
             )
             return False
 
+    @debug
     async def disconnection(self, ws):
-        logger.debug(f"Disconnected readeable of {self.topic_name}")
         if not ws.closed:
-            await ws.send_str("close")
+            await ws.send_str(CLOSE_SIGNAL)
 
-    async def get(self):
-        return await self.queue.get()
+    @debug
+    async def get(self, group=None):
+        data = await self.queue.get(group)
+        return data
 
 
 class TopicConnection:
+    @debug
     def __init__(self, address):
         self.address = address
 
@@ -104,20 +129,23 @@ class TopicConnection:
 
 
 class TopicClient(TopicConnection):
-    def __init_(self, address):
-        super().__init__(address)
+    @debug
+    def __init__(self, address):
+        TopicConnection.__init__(self, address)
         self.task = None
         self.ws = None
 
+    @debug
     async def connect(self):
-        logger.debug(
-            f"Connecting as client of {self.topic_name} to {self.address}"
-        )
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(self.address) as ws:
 
+                logger.debug("A")
+
                 self.ws = ws
                 await self.connection(ws)
+
+                logger.debug("B")
 
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
@@ -133,58 +161,73 @@ class TopicClient(TopicConnection):
                     else:
                         logger.debug(f"Ignored message {msg}")
 
+                logger.debug("C")
+
                 await self.disconnection(ws)
 
+    @debug
     async def start(self):
-        logger.debug(f"Starting client to {self.address}")
         self.task = asyncio.create_task(self.connect())
 
+    @debug
     async def stop(self):
-        logger.debug(f"Stopping client to {self.address}")
         if self.ws:
+            await self.disconnection(self.ws)
             await self.ws.close()
             self.ws = None
         if self.task:
             await self.task
             self.task = None
-        logger.debug(f"Stopped client to {self.address}")
 
 
 class TopicServer(TopicConnection):
-    def __init_(self, address):
-        super().__init__(address)
+    @debug
+    def __init__(self, address):
+        TopicConnection.__init__(self, address)
         self.site = None
 
+    @debug
+    async def on_shutdown(self, app):
+        for ws in set(app["websockets"]):
+            await ws.close(
+                code=WSCloseCode.GOING_AWAY, message="Server Shutdown"
+            )
+
+    @debug
     async def start(self):
-        logger.debug(f"Starting server on {self.address}")
         o = urlparse(self.address)
         app = web.Application()
+        app['websockets'] = weakref.WeakSet()
         app.add_routes(
             [web.get("/", self.handler), web.get("/{group}", self.handler)]
         )
-        runner = web.AppRunner(app)
-        await runner.setup()
-        self.site = web.TCPSite(runner, o.hostname, o.port)
+        app.on_shutdown.append(self.on_shutdown)
+        self.runner = web.AppRunner(app)
+        await self.runner.setup()
+        self.site = web.TCPSite(self.runner, o.hostname, o.port)
         await self.site.start()
 
+    @debug
     async def stop(self):
-        logger.debug(f"Stopping server on {self.address}")
-        await self.site.stop()
+        logger.info("Stoping runner")
+        await self.runner.cleanup()
 
+    @debug
     async def handler(self, request):
-        logger.debug(f"Connecting to server on {self.address} from {request}")
-
-        group = request.match_info.get('group')
+        group = request.match_info.get("group")
         logger.debug(f"Group: {group or 'ROOT'}")
 
         ws = web.WebSocketResponse()
         await ws.prepare(request)
+        request.app['websockets'].add(ws)
 
-        await self.connection(ws)
+        await self.connection(ws, group)
 
         async for msg in ws:
+            logger.debug(f"Server: {ws}")
             if msg.type == aiohttp.WSMsgType.TEXT:
-                if not await self.processing(ws, msg):
+                if not await self.processing(ws, msg, group):
+                    logger.debug("Server: Close?")
                     await ws.close()
                     break
             elif msg.type == aiohttp.WSMsgType.ERROR:
@@ -197,24 +240,28 @@ class TopicServer(TopicConnection):
 
 
 class WriteableTopicClient(WriteableTopic, TopicClient):
-    def __init__(self, topic, address):
-        WriteableTopic.__init__(self, topic)
+    @debug
+    def __init__(self, storage, topic, address):
+        WriteableTopic.__init__(self, storage, topic)
         TopicClient.__init__(self, address)
 
 
 class WriteableTopicServer(WriteableTopic, TopicServer):
-    def __init__(self, topic, address):
-        WriteableTopic.__init__(self, topic)
+    @debug
+    def __init__(self, storage, topic, address):
+        WriteableTopic.__init__(self, storage, topic)
         TopicServer.__init__(self, address)
 
 
 class RedeableTopicClient(RedeableTopic, TopicClient):
-    def __init__(self, topic, address):
-        RedeableTopic.__init__(self, topic)
+    @debug
+    def __init__(self, storage, topic, address):
+        RedeableTopic.__init__(self, storage, topic)
         TopicClient.__init__(self, address)
 
 
 class RedeableTopicServer(RedeableTopic, TopicServer):
-    def __init__(self, topic, address):
-        RedeableTopic.__init__(self, topic)
+    @debug
+    def __init__(self, storage, topic, address):
+        RedeableTopic.__init__(self, storage, topic)
         TopicServer.__init__(self, address)
