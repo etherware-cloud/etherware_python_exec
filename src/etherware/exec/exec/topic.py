@@ -32,8 +32,8 @@ class TopicProcessor:
         raise NotImplementedError
 
     @debug
-    def setup(self):
-        self.queue.setup()
+    def setup(self, group=None):
+        self.queue.setup(group=group)
 
     def __str__(self):
         return (
@@ -48,16 +48,18 @@ class WriteableTopic(TopicProcessor):
     def __init__(self, *args, **kwargs):
         TopicProcessor.__init__(self, *args, **kwargs)
         self.setup()
+        self.ready = asyncio.Event()
 
     @debug
     async def connection(self, ws, group=None):
-        pass
+        self.queue.setup(group)
 
     @debug
     async def processing(self, ws, msg, group=None):
         if msg.data == CLOSE_SIGNAL:
             return False
         elif msg.data == READY_SIGNAL:
+            self.ready.set()
             while True:
                 try:
                     answer = await asyncio.wait_for(
@@ -70,6 +72,7 @@ class WriteableTopic(TopicProcessor):
                         return False
                     logger.info("Writeable not closed is a server")
                 else:
+                    self.ready.clear()
                     await ws.send_str(answer)
                     return True
 
@@ -79,6 +82,7 @@ class WriteableTopic(TopicProcessor):
 
     @debug
     async def put(self, message):
+        await self.ready.wait()
         await self.queue.put(message)
 
 

@@ -258,7 +258,7 @@ async def test_many_to_one_same_group(
 
 
 @pytest.mark.asyncio
-async def _test_one_to_many_diff_group(
+async def test_one_to_many_diff_group(
     caplog, writeable_topic_server, redeable_topic_client, sync
 ):
     to_send = ["hello", "my", "word", "you", "are", "beatiful"]
