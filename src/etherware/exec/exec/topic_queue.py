@@ -1,5 +1,5 @@
 import asyncio
-from etherware.exec.logging import logger, debug
+from etherware.exec.logging import logger
 
 
 class TopicQueue:

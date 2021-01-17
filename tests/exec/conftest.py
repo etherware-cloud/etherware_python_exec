@@ -15,7 +15,7 @@ from etherware.exec.exec.topic import (
 def topic_connector():
     def connector_inner(connector):
         def inner(topic=None, address=None, group=None):
-            address = address or "http://localhost:8080"
+            address = address or "http://localhost:0"
             if group:
                 address = urljoin(address, f"/{group}")
             return connector(MemoryStorage(), topic or "test", address)

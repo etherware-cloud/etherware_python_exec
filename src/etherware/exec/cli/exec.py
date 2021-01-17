@@ -13,8 +13,8 @@ from os.path import expanduser
 @cli.command()
 @click.option("-E", "--environment", default=DEFAULT_ENVIRONMENT)
 @click.option("-p", "--pidfile", default=None)
-@click.option("-o", "--stdout", default=None)
-@click.option("-e", "--stderr", default=None)
+@click.option("-o", "--stdout", default="~/out.txt")
+@click.option("-e", "--stderr", default="~/err.txt")
 def start(environment, pidfile, stdout, stderr):
     click.echo(
         f"PID file {expanduser(pidfile)}" if pidfile else "Not using pidfile"

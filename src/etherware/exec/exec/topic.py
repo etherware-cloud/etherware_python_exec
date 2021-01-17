@@ -5,6 +5,7 @@
 
 from urllib.parse import urlparse
 from etherware.exec.logging import logger, debug
+import socket
 import asyncio
 import aiohttp
 import weakref
@@ -189,6 +190,21 @@ class TopicServer(TopicConnection):
     def __init__(self, address):
         TopicConnection.__init__(self, address)
         self.site = None
+        self.scheme = None
+        self.hostname = None
+        self.port = None
+        self.sock_family = None
+
+    @debug
+    def get_address(self):
+        if self.scheme and self.hostname and self.port:
+            if self.sock_family is socket.AF_INET:
+                return f"http://{self.hostname}:{self.port}"
+            elif self.sock_family is socket.AF_INET6:
+                return f"http://[{self.hostname}]:{self.port}"
+            raise RuntimeError
+        else:
+            return self.address
 
     @debug
     async def on_shutdown(self, app):
@@ -199,7 +215,6 @@ class TopicServer(TopicConnection):
 
     @debug
     async def start(self):
-        o = urlparse(self.address)
         app = web.Application()
         app["websockets"] = weakref.WeakSet()
         app.add_routes(
@@ -208,13 +223,22 @@ class TopicServer(TopicConnection):
         app.on_shutdown.append(self.on_shutdown)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
+        o = urlparse(self.address)
         self.site = web.TCPSite(self.runner, o.hostname, o.port)
         await self.site.start()
+        main_socket = self.site._server.sockets[0]
+        self.scheme = o.scheme
+        self.hostname, self.port, *_ = main_socket.getsockname()
+        self.sock_family = main_socket.family
 
     @debug
     async def stop(self):
         logger.info("Stoping runner")
         await self.runner.cleanup()
+        self.scheme = None
+        self.hostname = None
+        self.port = None
+        self.sock_family = None
 
     @debug
     async def handler(self, request):

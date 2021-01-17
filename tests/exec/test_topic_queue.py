@@ -12,15 +12,17 @@ async def test_consumer_first(caplog, sync):
         tq = TopicQueue(MemoryStorage())
 
         @sync.producer
-        async def producer():
-            for msg in messages:
-                await tq.put(msg)
+        async def producer(c):
+            async with c:
+                for msg in messages:
+                    await tq.put(msg)
 
         @sync.consumer
-        async def consumer():
-            for m in messages:
-                data = await tq.get()
-                assert data == m
+        async def consumer(c):
+            async with c:
+                for m in messages:
+                    data = await tq.get()
+                    assert data == m
 
         await asyncio.gather(producer(), consumer())
 
@@ -35,17 +37,19 @@ async def test_producer_first(caplog, sync):
             await tq.put(msg)
 
         @sync.producer
-        async def producer():
-            for msg in messages:
-                await tq.put(msg)
+        async def producer(c):
+            async with c:
+                for msg in messages:
+                    await tq.put(msg)
 
         @sync.consumer
-        async def consumer():
-            for m in messages:
-                logging.debug(f"------ {tq} -----")
-                e = await tq.get()
-                logging.debug(f"------ {e} {m} -----")
-                assert e == m
+        async def consumer(c):
+            async with c:
+                for m in messages:
+                    logging.debug(f"------ {tq} -----")
+                    e = await tq.get()
+                    logging.debug(f"------ {e} {m} -----")
+                    assert e == m
 
         await asyncio.gather(producer(), consumer())
 
@@ -57,13 +61,15 @@ async def test_two_groups(caplog, sync):
         tq = TopicQueue(MemoryStorage())
 
         @sync.producer
-        async def producer():
-            for msg in messages:
-                await tq.put(msg)
+        async def producer(c):
+            async with c:
+                for msg in messages:
+                    await tq.put(msg)
 
         @sync.consumer
-        async def consumer(group):
-            for m in messages:
-                assert await tq.get(group) == m
+        async def consumer(c, group):
+            async with c:
+                for m in messages:
+                    assert await tq.get(group) == m
 
         await asyncio.gather(producer(), consumer("a"), consumer("b"))

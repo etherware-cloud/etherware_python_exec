@@ -5,36 +5,48 @@ import socket
 
 
 @pytest.mark.asyncio
-async def test_RedeableTopicServer(caplog, redeable_topic_server):
+async def test_server_RedeableTopicServer(caplog, redeable_topic_server):
     with caplog.at_level(logging.DEBUG):
         rts = redeable_topic_server()
 
         await rts.start()
+        hostname = rts.hostname
+        port = rts.port
 
-        a_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result_of_check = a_socket.connect_ex(("localhost", 8080))
+        logging.info(f"Server openned on {hostname}:{port}")
+
+        a_socket = socket.socket(rts.sock_family, socket.SOCK_STREAM)
+        result_of_check = a_socket.connect_ex((hostname, port))
         assert result_of_check == 0
 
         await rts.stop()
+        assert rts.hostname is None
+        assert rts.port is None
 
-        result_of_check = a_socket.connect_ex(("localhost", 8080))
+        result_of_check = a_socket.connect_ex((hostname, port))
         assert result_of_check != 0
 
 
 @pytest.mark.asyncio
-async def test_WriteableTopicServer(caplog, writeable_topic_server):
+async def test_server_WriteableTopicServer(caplog, writeable_topic_server):
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
 
         await wts.start()
+        hostname = wts.hostname
+        port = wts.port
 
-        a_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result_of_check = a_socket.connect_ex(("localhost", 8080))
+        logging.info(f"Server openned on {hostname}:{port}")
+
+        a_socket = socket.socket(wts.sock_family, socket.SOCK_STREAM)
+        result_of_check = a_socket.connect_ex((hostname, port))
         assert result_of_check == 0
 
         await wts.stop()
+        assert wts.hostname is None
+        assert wts.port is None
 
-        result_of_check = a_socket.connect_ex(("localhost", 8080))
+        result_of_check = a_socket.connect_ex((hostname, port))
         assert result_of_check != 0
 
 
@@ -45,9 +57,8 @@ async def test_WriteableTopicClient_one_message(
     expected = "hello"
     with caplog.at_level(logging.DEBUG):
         rts = redeable_topic_server()
-        wtc = writeable_topic_client()
-
         await rts.start()
+        wtc = writeable_topic_client(address=rts.get_address())
 
         @sync.producer
         async def producer(c):
@@ -75,7 +86,8 @@ async def test_WriteableTopicClient_many_messages(
     to_send = ["hello", "my", "word"]
     with caplog.at_level(logging.INFO):
         rts = redeable_topic_server()
-        wtc = writeable_topic_client()
+        await rts.start()
+        wtc = writeable_topic_client(address=rts.get_address())
 
         await rts.start()
 
@@ -106,10 +118,9 @@ async def test_WriteableTopicServer_one_message(
 ):
     expected = "hello"
     with caplog.at_level(logging.DEBUG):
-        rtc = redeable_topic_client()
         wts = writeable_topic_server()
-
         await wts.start()
+        rtc = redeable_topic_client(address=wts.get_address())
 
         @sync.producer
         async def producer(c):
@@ -137,10 +148,9 @@ async def test_WriteableTopicServer_many_messages(
 ):
     to_send = ["hello", "my", "word"]
     with caplog.at_level(logging.DEBUG):
-        rtc = redeable_topic_client()
         wts = writeable_topic_server()
-
         await wts.start()
+        rtc = redeable_topic_client(address=wts.get_address())
 
         @sync.producer
         async def producer(c):
@@ -173,10 +183,13 @@ async def test_one_to_many_same_group(
     to_send = ["hello", "my", "word", "you", "are", "beatiful"]
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
-        client_count = 3
-        clients = [redeable_topic_client("A") for _ in range(client_count)]
-
         await wts.start()
+
+        client_count = 3
+        clients = [
+            redeable_topic_client("A", address=wts.get_address())
+            for _ in range(client_count)
+        ]
 
         @sync.producer
         async def producer(c):
@@ -216,12 +229,13 @@ async def test_many_to_one_same_group(
     to_send = ["hello", "my", "word", "you", "are", "beatiful"]
     with caplog.at_level(logging.DEBUG):
         rts = redeable_topic_server()
+        await rts.start()
+
         client_count = 3
         clients = [
-            writeable_topic_client(group="A") for _ in range(client_count)
+            writeable_topic_client(group="A", address=rts.get_address())
+            for _ in range(client_count)
         ]
-
-        await rts.start()
 
         @sync.producer
         async def producer(c, wtc):
@@ -264,13 +278,13 @@ async def test_one_to_many_diff_group(
     to_send = ["hello", "my", "word", "you", "are", "beatiful"]
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
+        await wts.start()
+
         client_count = 3
         clients = [
-            redeable_topic_client(group=f"group_{i}")
+            redeable_topic_client(group=f"g_{i}", address=wts.get_address())
             for i in range(client_count)
         ]
-
-        await wts.start()
 
         @sync.producer
         async def producer(c):
