@@ -6,7 +6,7 @@
 import click
 from .root import cli
 
-from ..exec.witness import Witness
+from ..lib.witness import Witness
 
 
 @cli.group()
