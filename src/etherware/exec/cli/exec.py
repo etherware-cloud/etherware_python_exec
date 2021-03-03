@@ -5,8 +5,8 @@
 
 import click
 from .root import cli
-from etherware.exec.lib.mainloop import ExecutorMainLoop, DEFAULT_ENVIRONMENT
-from etherware.exec.lib.witness import Witness
+from etherware.exec.core.mainloop import ExecutorMainLoop, DEFAULT_ENVIRONMENT
+from etherware.exec.core.witness import Witness
 from os.path import expanduser
 
 

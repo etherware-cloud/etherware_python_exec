@@ -6,20 +6,16 @@
 #
 
 import io
-import os
-
-
-from os.path import basename
 from os.path import dirname
 from os.path import join
-from os.path import splitext
 
 from setuptools import setup, find_namespace_packages
 
 
 def read(*names, **kwargs):
     with io.open(
-        join(dirname(__file__), *names), encoding=kwargs.get("encoding", "utf8")
+        join(dirname(__file__), *names),
+            encoding=kwargs.get("encoding", "utf8")
     ) as fh:
         return fh.read()
 

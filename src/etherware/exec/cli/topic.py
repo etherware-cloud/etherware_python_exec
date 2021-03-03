@@ -6,7 +6,7 @@
 import click
 from .root import cli
 
-from ..lib.witness import Witness
+from etherware.exec.core.witness import Witness
 
 
 @cli.group()
