@@ -15,3 +15,6 @@ test:
 
 pytest:
 	${VENV_PYTEST}
+
+pytest-cont:
+	${VENV_PYTEST} -f -v
