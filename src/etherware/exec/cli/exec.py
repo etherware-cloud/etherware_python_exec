@@ -5,19 +5,21 @@
 
 import click
 from .root import cli
-from etherware.exec.core.mainloop import ExecutorMainLoop, DEFAULT_ENVIRONMENT
+from etherware.exec.core.defaults import DEFAULT_ENVIRONMENT
+from etherware.exec.core.mainloop import ExecutorMainLoop
 from etherware.exec.core.witness import Witness
 from os.path import expanduser
 
 
 @cli.command()
 @click.option("-E", "--environment", default=DEFAULT_ENVIRONMENT)
-@click.option("-p", "--pidfile", default=None)
+@click.option("-p", "--pid-file", default=None)
 @click.option("-o", "--stdout", default="~/out.txt")
 @click.option("-e", "--stderr", default="~/err.txt")
-def start(environment, pidfile, stdout, stderr):
+def start(environment, pid_file, stdout, stderr):
+    click.echo(f"Starting on environment {environment}.")
     click.echo(
-        f"PID file {expanduser(pidfile)}" if pidfile else "Not using pidfile"
+        f"PID file {expanduser(pid_file)}" if pid_file else "Not using pid-file"
     )
     click.echo(
         f"Redirecting stdout to: {expanduser(stdout)}"
@@ -30,7 +32,7 @@ def start(environment, pidfile, stdout, stderr):
         else "Nulling stderr"
     )
     mainloop = ExecutorMainLoop(
-        pidfile=expanduser(pidfile) if pidfile else None,
+        pidfile=expanduser(pid_file) if pid_file else None,
         stdin=None,
         stdout=expanduser(stdout),
         stderr=expanduser(stderr),

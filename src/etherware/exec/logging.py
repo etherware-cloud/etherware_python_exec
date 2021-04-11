@@ -5,6 +5,7 @@
 
 import logging
 import inspect
+from typing import Union, Coroutine, Callable
 
 # create logger
 logger = logging.getLogger("etherware.python.exec")
@@ -12,7 +13,6 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-#ch.setLevel(logging.DEBUG)
 
 # create formatter
 formatter = logging.Formatter(
@@ -25,8 +25,13 @@ ch.setFormatter(formatter)
 # add ch to logger
 logger.addHandler(ch)
 
+F = Union[Callable, Coroutine]
 
-def debug(f):
+
+def debug(f: F) -> F:
+    """
+    Decorator which enable debugging info on start and end of functions.
+    """
     def inner(self, *args, **kwargs):
         debug_prefix = (
             f"{self.__class__.__name__}[0x{id(self):x}]"
@@ -35,14 +40,15 @@ def debug(f):
         logger.debug(
             debug_prefix.format(action="<") + f":args={args} kwargs={kwargs}"
         )
+        result = None
         try:
             result = f(self, *args, **kwargs)
-            return result
         except Exception as e:
             logger.exception(debug_prefix.format(action=">") + f":{e}")
             raise e
-        else:
+        finally:
             logger.debug(debug_prefix.format(action=">") + f":{result}")
+        return result
 
     async def async_inner(self, *args, **kwargs):
         debug_prefix = (
@@ -52,14 +58,15 @@ def debug(f):
         logger.debug(
             debug_prefix.format(action="<") + f":args={args} kwargs={kwargs}"
         )
+        result = None
         try:
             result = await f(self, *args, **kwargs)
-            return result
         except Exception as e:
             logger.exception(debug_prefix.format(action=">") + f":{e}")
             raise e
-        else:
+        finally:
             logger.debug(debug_prefix.format(action=">") + f":{result}")
+        return result
 
     if inspect.iscoroutinefunction(f):
         return async_inner

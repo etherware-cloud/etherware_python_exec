@@ -24,7 +24,7 @@ class TopicQueue:
         def inner():
             next_pos = len(self._storage)
             logger.debug(f"wait_condition {self} {local_top}<{next_pos}")
-            return local_top >= 0 and local_top < next_pos
+            return 0 <= local_top < next_pos
 
         return inner
 

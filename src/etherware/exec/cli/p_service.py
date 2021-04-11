@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# P-service commad line operations.
+# P-service command line operations.
 #
 
 import click
@@ -8,24 +8,24 @@ from .root import cli
 
 
 @cli.group()
-def pservice():
+def p_service():
     click.echo("P-service commands")
     pass
 
 
-@pservice.command()
-def list():
+@p_service.command("list")
+def list_p_services():
     click.echo("List p-services")
     pass
 
 
-@pservice.command()
+@p_service.command()
 def deploy():
     click.echo("Deploy p-service")
     pass
 
 
-@pservice.command()
+@p_service.command()
 def kill():
     click.echo("Stop p-service")
     pass

@@ -5,15 +5,15 @@ import socket
 
 
 @pytest.mark.asyncio
-async def test_server_RedeableTopicServer(caplog, redeable_topic_server):
+async def test_server_readable_topic_server(caplog, readable_topic_server):
     with caplog.at_level(logging.DEBUG):
-        rts = redeable_topic_server()
+        rts = readable_topic_server()
 
         await rts.start()
         hostname = rts.hostname
         port = rts.port
 
-        logging.info(f"Server openned on {hostname}:{port}")
+        logging.info(f"Server opened on {hostname}:{port}")
 
         a_socket = socket.socket(rts.sock_family, socket.SOCK_STREAM)
         result_of_check = a_socket.connect_ex((hostname, port))
@@ -28,7 +28,7 @@ async def test_server_RedeableTopicServer(caplog, redeable_topic_server):
 
 
 @pytest.mark.asyncio
-async def test_server_WriteableTopicServer(caplog, writeable_topic_server):
+async def test_server_writeable_topic_server(caplog, writeable_topic_server):
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
 
@@ -36,7 +36,7 @@ async def test_server_WriteableTopicServer(caplog, writeable_topic_server):
         hostname = wts.hostname
         port = wts.port
 
-        logging.info(f"Server openned on {hostname}:{port}")
+        logging.info(f"Server opened on {hostname}:{port}")
 
         a_socket = socket.socket(wts.sock_family, socket.SOCK_STREAM)
         result_of_check = a_socket.connect_ex((hostname, port))
@@ -51,12 +51,12 @@ async def test_server_WriteableTopicServer(caplog, writeable_topic_server):
 
 
 @pytest.mark.asyncio
-async def test_WriteableTopicClient_one_message(
-    caplog, redeable_topic_server, writeable_topic_client, sync
+async def test_writeable_topic_client_one_message(
+    caplog, readable_topic_server, writeable_topic_client, sync
 ):
     expected = "hello"
     with caplog.at_level(logging.DEBUG):
-        rts = redeable_topic_server()
+        rts = readable_topic_server()
         await rts.start()
         wtc = writeable_topic_client(address=rts.get_address())
 
@@ -80,12 +80,12 @@ async def test_WriteableTopicClient_one_message(
 
 
 @pytest.mark.asyncio
-async def test_WriteableTopicClient_many_messages(
-    caplog, redeable_topic_server, writeable_topic_client, sync
+async def test_writeable_topic_client_many_messages(
+    caplog, readable_topic_server, writeable_topic_client, sync
 ):
     to_send = ["hello", "my", "word"]
     with caplog.at_level(logging.INFO):
-        rts = redeable_topic_server()
+        rts = readable_topic_server()
         await rts.start()
         wtc = writeable_topic_client(address=rts.get_address())
 
@@ -113,14 +113,14 @@ async def test_WriteableTopicClient_many_messages(
 
 
 @pytest.mark.asyncio
-async def test_WriteableTopicServer_one_message(
-    caplog, writeable_topic_server, redeable_topic_client, sync
+async def test_writeable_topic_server_one_message(
+    caplog, writeable_topic_server, readable_topic_client, sync
 ):
     expected = "hello"
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
         await wts.start()
-        rtc = redeable_topic_client(address=wts.get_address())
+        rtc = readable_topic_client(address=wts.get_address())
 
         @sync.producer
         async def producer(c):
@@ -143,14 +143,14 @@ async def test_WriteableTopicServer_one_message(
 
 
 @pytest.mark.asyncio
-async def test_WriteableTopicServer_many_messages(
-    caplog, writeable_topic_server, redeable_topic_client, sync
+async def test_writeable_topic_server_many_messages(
+    caplog, writeable_topic_server, readable_topic_client, sync
 ):
     to_send = ["hello", "my", "word"]
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
         await wts.start()
-        rtc = redeable_topic_client(address=wts.get_address())
+        rtc = readable_topic_client(address=wts.get_address())
 
         @sync.producer
         async def producer(c):
@@ -178,16 +178,16 @@ async def test_WriteableTopicServer_many_messages(
 
 @pytest.mark.asyncio
 async def test_one_to_many_same_group(
-    caplog, writeable_topic_server, redeable_topic_client, sync
+    caplog, writeable_topic_server, readable_topic_client, sync
 ):
-    to_send = ["hello", "my", "word", "you", "are", "beatiful"]
+    to_send = ["hello", "my", "word", "you", "are", "beautiful"]
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
         await wts.start()
 
         client_count = 3
         clients = [
-            redeable_topic_client("A", address=wts.get_address())
+            readable_topic_client("A", address=wts.get_address())
             for _ in range(client_count)
         ]
 
@@ -215,7 +215,7 @@ async def test_one_to_many_same_group(
 
         logging.info(f"-------------------- {pc_result} ---------------")
 
-        c_result = [i for l in pc_result[1:] for i in l]
+        c_result = [i for item in pc_result[1:] for i in item]
         assert len(pc_result[0]) == len(c_result)
         assert set(pc_result[0]) == set(c_result)
 
@@ -224,11 +224,11 @@ async def test_one_to_many_same_group(
 
 @pytest.mark.asyncio
 async def test_many_to_one_same_group(
-    caplog, writeable_topic_client, redeable_topic_server, sync
+    caplog, writeable_topic_client, readable_topic_server, sync
 ):
-    to_send = ["hello", "my", "word", "you", "are", "beatiful"]
+    to_send = ["hello", "my", "word", "you", "are", "beautiful"]
     with caplog.at_level(logging.DEBUG):
-        rts = redeable_topic_server()
+        rts = readable_topic_server()
         await rts.start()
 
         client_count = 3
@@ -250,7 +250,7 @@ async def test_many_to_one_same_group(
         async def consumer(c):
             async with c:
                 result = []
-                for e in to_send * 3:
+                for _e in to_send * 3:
                     item = await rts.get()
                     result.append(item)
                     logging.info(f"------------- {result} -------------")
@@ -263,7 +263,7 @@ async def test_many_to_one_same_group(
 
         logging.info(f"-------------------- {pc_result} ---------------")
 
-        p_result = sorted([i for l in pc_result[:client_count] for i in l])
+        p_result = sorted([i for item in pc_result[:client_count] for i in item])
         c_result = sorted(pc_result[-1])
 
         assert p_result == c_result
@@ -273,16 +273,16 @@ async def test_many_to_one_same_group(
 
 @pytest.mark.asyncio
 async def test_one_to_many_diff_group(
-    caplog, writeable_topic_server, redeable_topic_client, sync
+    caplog, writeable_topic_server, readable_topic_client, sync
 ):
-    to_send = ["hello", "my", "word", "you", "are", "beatiful"]
+    to_send = ["hello", "my", "word", "you", "are", "beautiful"]
     with caplog.at_level(logging.DEBUG):
         wts = writeable_topic_server()
         await wts.start()
 
         client_count = 3
         clients = [
-            redeable_topic_client(group=f"g_{i}", address=wts.get_address())
+            readable_topic_client(group=f"g_{i}", address=wts.get_address())
             for i in range(client_count)
         ]
 

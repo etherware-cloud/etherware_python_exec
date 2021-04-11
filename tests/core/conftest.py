@@ -6,8 +6,8 @@ from etherware.exec.core.storage import MemoryStorage
 from etherware.exec.core.topic_processor import (
     WriteableTopicClient,
     WriteableTopicServer,
-    RedeableTopicClient,
-    RedeableTopicServer,
+    ReadableTopicClient,
+    ReadableTopicServer,
 )
 
 
@@ -26,8 +26,8 @@ def topic_connector():
 
 
 @pytest.fixture
-def redeable_topic_server(topic_connector):
-    return topic_connector(RedeableTopicServer)
+def readable_topic_server(topic_connector):
+    return topic_connector(ReadableTopicServer)
 
 
 @pytest.fixture
@@ -36,8 +36,8 @@ def writeable_topic_server(topic_connector):
 
 
 @pytest.fixture
-def redeable_topic_client(topic_connector):
-    return topic_connector(RedeableTopicClient)
+def readable_topic_client(topic_connector):
+    return topic_connector(ReadableTopicClient)
 
 
 @pytest.fixture

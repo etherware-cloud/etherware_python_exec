@@ -2,7 +2,6 @@
 #
 # Daemon.
 #
-
 import sys
 import os
 import time
@@ -10,22 +9,24 @@ import signal
 import psutil
 import asyncio
 import functools
+from pathlib import Path
 from etherware.exec.logging import logger
+from etherware.exec.core.types import NullablePath, EventLoop, Union, List
 
 
-NULL_DEVICE = "/dev/null"
+NULL_DEVICE = Path("/dev/null")
 
 
 class Daemon(object):
     def __init__(
         self,
-        working_directory=None,
-        pidfile=None,
-        stdin=None,
-        stdout=None,
-        stderr=None,
-    ):
-        self.ver = 0.1  # version
+        working_directory: NullablePath = None,
+        pid_file: NullablePath = None,
+        stdin: NullablePath = None,
+        stdout: NullablePath = None,
+        stderr: NullablePath = None,
+    ) -> None:
+        self.ver = "0.1"  # version
         self.pauseRunLoop = 0
         self.restartPause = 1
         self.waitToHardKill = 3
@@ -36,16 +37,16 @@ class Daemon(object):
         self.stdin = stdin or NULL_DEVICE
         self.stdout = stdout or NULL_DEVICE
         self.stderr = stderr or NULL_DEVICE
-        self.pidfile = pidfile
+        self.pid_file = pid_file
 
         self.loop = None
 
-    def _sigterm_handler(self, signum, loop):
+    def _sigterm_handler(self, signum: int, loop: EventLoop) -> None:
         logger.info(f"Terminal signal: {signum}!!!")
         self.cleanup(loop)
         loop.stop()
 
-    def _reload_handler(self, signum, loop):
+    def _reload_handler(self, signum, _loop: EventLoop) -> None:
         logger.info(f"Reload handler signal: {signum}!!!")
         self.isReloadSignal = True
 
@@ -53,7 +54,7 @@ class Daemon(object):
     def echo(m):
         logger.info(m)
 
-    def _parent_fork(self, n):
+    def _parent_fork(self, n: int) -> None:
         try:
             pid = os.fork()
             if pid > 0:
@@ -63,7 +64,7 @@ class Daemon(object):
             self.echo(f"fork #{n} failed: {e.errno} ({e.strerror})\n")
             sys.exit(1)
 
-    def _makeDaemon(self):
+    def _make_daemon(self) -> None:
         """
         Make a daemon, do double-fork magic.
         """
@@ -92,23 +93,23 @@ class Daemon(object):
         os.dup2(so.fileno(), sys.stdout.fileno())
         os.dup2(se.fileno(), sys.stderr.fileno())
 
-    def _setProcessIdByFile(self):
-        if self.pidfile:
+    def _set_process_id_by_file(self) -> None:
+        if self.pid_file:
             pid = str(os.getpid())
-            with open(self.pidfile, "w+") as pf:
+            with open(self.pid_file, "w+") as pf:
                 pf.write(f"{pid}\n")
 
-    def _getProcessIdByFile(self):
+    def _get_process_id_by_file(self) -> Union[int, None]:
         try:
-            with open(self.pidfile, "r") as pf:
+            with open(self.pid_file, "r") as pf:
                 pid = int(pf.read().strip())
         except IOError:
             pid = None
         return pid
 
-    def _getProcessIdByProcessList(self):
+    def _get_process_id_by_process_list(self) -> List[psutil.Process]:
         ignore_list = ["strace", "stop"]
-        procs = []
+        processes = []
 
         for p in psutil.process_iter():
             if self.processName in [
@@ -118,17 +119,22 @@ class Daemon(object):
                 if p.pid != os.getpid() and not any(
                     ign in p.cmdline() for ign in ignore_list
                 ):
-                    procs.append(p)
+                    processes.append(p)
 
-        return procs
+        return processes
 
-    def _getProcessId(self):
-        if self.pidfile:
-            return [self._getProcessIdByFile()]
+    def _get_process_id(self) -> List[psutil.Process]:
+        if self.pid_file:
+            pid = self._get_process_id_by_file()
+            return [psutil.Process(pid)] if pid else []
         else:
-            return self._getProcessIdByProcessList()
+            return self._get_process_id_by_process_list()
 
-    async def setup_signal_handler(self):
+    def _pid_list(self, separator: str = ',') -> str:
+        processes = self._get_process_id()
+        return separator.join([str(p) for p in processes]) if processes else None
+
+    async def setup_signal_handler(self) -> None:
         loop = asyncio.get_running_loop()
 
         # Handle signals
@@ -145,17 +151,19 @@ class Daemon(object):
             functools.partial(self._reload_handler, signal.SIGHUP, loop),
         )
 
-    def start(self):
+    def setup(self) -> None:
+        raise NotImplementedError
+
+    def start(self) -> None:
         """
         Start daemon.
         """
         # Check if the daemon is already running.
-        procs = self._getProcessId()
+        processes = self._pid_list()
 
-        if procs:
-            pids = ",".join([str(p.pid) for p in procs])
+        if processes:
             self.echo(
-                f"Find a previous daemon processes with PIDs {pids}. "
+                f"Find a previous daemon processes with PIDs {processes}. "
                 "Is not already the daemon running?"
             )
             sys.exit(1)
@@ -163,9 +171,9 @@ class Daemon(object):
             self.echo(f"Start the daemon version {self.ver}")
 
         # Daemonize the main process
-        self._makeDaemon()
-        # Save PID if pidfile is defined
-        self._setProcessIdByFile()
+        self._make_daemon()
+        # Save PID if pid_file is defined
+        self._set_process_id_by_file()
         # Setup loop
         self.setup()
         # Start loop
@@ -174,35 +182,39 @@ class Daemon(object):
         loop.create_task(self.run())
         loop.run_forever()
 
-    # this method you have to override
-    async def run(self):
-        pass
+    async def run(self) -> None:
+        """
+        Main run async execution.
+        This method have to being override.
+        """
+        raise NotImplementedError
 
-    def version(self):
+    def version(self) -> None:
+        """
+        Returns daemon version
+        """
         self.echo(f"The daemon version {self.ver}")
 
-    def status(self):
+    def status(self) -> None:
         """
-        Get status of the daemon.
+        Print daemon status.
         """
+        process_list = self._pid_list()
 
-        procs = self._getProcessId()
-
-        if procs:
-            pids = ",".join([str(p.pid) for p in procs])
-            self.echo(f"The daemon is running with PID {pids}.")
+        if process_list:
+            self.echo(f"The daemon is running with PID {process_list}.")
         else:
             self.echo("The daemon is not running!")
 
-    def reload(self):
+    def reload(self) -> None:
         """
         Reload the daemon.
         """
 
-        procs = self._getProcessID()
+        processes = self._get_process_id()
 
-        if procs:
-            for p in procs:
+        if processes:
+            for p in processes:
                 os.kill(p.pid, signal.SIGHUP)
                 self.echo(
                     f"Send SIGHUP signal into"
@@ -211,12 +223,12 @@ class Daemon(object):
         else:
             self.echo("The daemon is not running!")
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop the daemon.
         """
 
-        procs = self._getProcessId()
+        processes = self._get_process_id()
 
         def on_terminate(process):
             self.echo(
@@ -224,12 +236,12 @@ class Daemon(object):
                 " has ended correctly."
             )
 
-        if procs:
-            for p in procs:
+        if processes:
+            for p in processes:
                 p.terminate()
 
             gone, alive = psutil.wait_procs(
-                procs, timeout=self.waitToHardKill, callback=on_terminate
+                processes, timeout=self.waitToHardKill, callback=on_terminate
             )
 
             for p in alive:
@@ -241,7 +253,7 @@ class Daemon(object):
         else:
             self.echo("Cannot find some daemon process, I will do nothing.")
 
-    def restart(self):
+    def restart(self) -> None:
         """
         Restart the daemon.
         """
@@ -251,3 +263,6 @@ class Daemon(object):
             time.sleep(self.restartPause)
 
         self.start()
+
+    def cleanup(self, loop: EventLoop):
+        pass

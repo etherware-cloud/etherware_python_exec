@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Topic commad line operations.
+# Topic command line operations.
 #
 
 import click
@@ -15,9 +15,9 @@ def topic():
     pass
 
 
-@topic.command()
+@topic.command("list")
 @click.option("-t", "--timeout", default=5)
-def list(timeout):
+def topic_list(timeout):
     click.echo("List local topics")
     w = Witness()
 

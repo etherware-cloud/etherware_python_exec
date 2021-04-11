@@ -12,9 +12,11 @@ venv:
 test:
 	${VENV_PYTHON} setup.py test
 
-
 pytest:
 	${VENV_PYTEST}
 
 pytest-cont:
 	${VENV_PYTEST} -f -v
+
+start:
+	. venv/bin/python_exec start

@@ -2,26 +2,7 @@
 #
 # Default values.
 #
-
-from os import mkdir
-from os.path import exists, expanduser
-from dataclasses import dataclass
-
-
-@dataclass
-class Environment:
-    working_directory: str
-    pid_file: str
-    group_name: str = None
-
-    def __post_init__(self):
-        self.working_directory = expanduser(self.working_directory)
-        self.pid_file = expanduser(self.pid_file)
-
-    def setup(self):
-        if not exists(self.working_directory):
-            mkdir(self.working_directory)
-
+from etherware.exec.core.environment import Environment
 
 ENVIRONMENTS = {
     "prod": Environment(

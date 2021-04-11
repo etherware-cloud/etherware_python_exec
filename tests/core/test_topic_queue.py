@@ -39,8 +39,8 @@ async def test_producer_first(caplog, sync):
         @sync.producer
         async def producer(c):
             async with c:
-                for msg in messages:
-                    await tq.put(msg)
+                for message in messages:
+                    await tq.put(message)
 
         @sync.consumer
         async def consumer(c):

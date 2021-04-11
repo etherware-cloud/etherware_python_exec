@@ -3,17 +3,49 @@
 # Mainloop.
 #
 
+from etherware.exec.core.types import List, Tuple
 from etherware.exec.logging import logger
-from pathlib import Path
 from .daemon import Daemon
-from .defaults import ENVIRONMENTS, DEFAULT_ENVIRONMENT
 from .moderator import Moderator
-from .storage import SqliteStorage
+from .witness import Witness, NotTopicAvailableError
 from .executable import Executable
 from aiohttp import web
 from functools import partial
+from .topic_node import TopicNode
+from .topic_processor import WriteableTopicClient, ReadableTopicClient
+from .storage import MemoryStorage
 
 import asyncio
+
+
+class IncompleteTopicsToExecuteError(Exception):
+    pass
+
+
+class TopicWrapper:
+    TOPIC_ROLE_MAP = {
+        'producer': WriteableTopicClient,
+        'consumer': ReadableTopicClient,
+    }
+
+    def __init__(self, storage_class=None, witness=None, timeout=60):
+        self._topics = {}
+        self._storage_class = storage_class or MemoryStorage
+        self._witness = witness or Witness()
+        self._timeout = timeout
+
+    def connect_to_topic_servers(self, topics: List[Tuple[str, Tuple[str, str]]]):
+        for topic_alias, (topic_role, topic_name) in topics:
+            with self._witness as w:
+                try:
+                    address = w[topic_name]
+                except NotTopicAvailableError:
+                    raise IncompleteTopicsToExecuteError
+                self._topics[topic_alias] = \
+                    self.TOPIC_ROLE_MAP[topic_role](self._storage_class(), topic_alias, address)
+
+    def topics(self):
+        return self._topics
 
 
 async def deployer(
@@ -42,21 +74,19 @@ async def deployer(
             exception_topic.put, command_id=c_id, received=c_verb, over=e_id
         )
 
-        put_status(message="Asigning Topics")
-        moderator = Moderator()
+        put_status(message="Assigning Topics")
 
-        topics = {
-            topic_alias: moderator.get_topic(topic_role, topic_name)
-            for topic_alias, (topic_role, topic_name) in d_topics
-        }
+        topics = TopicWrapper()
+
+        topics.connect_to_topic_servers(d_topics)
 
         put_status(message="Building Executables")
 
-        executables.append(Executable(topics, "deployer", None, {}, deployer))
+        deployed = Executable(topics.topics(), d_mainloop, d_optimization, d_parameters, e_object)
+        executables.append(deployed)
 
         put_status(message="Starting")
-
-        exec.start()
+        deployed.start()
 
 
 class ExecutorMainLoop(Daemon):
@@ -64,9 +94,12 @@ class ExecutorMainLoop(Daemon):
         super().__init__(*args, **kwargs)
         self.moderator = Moderator()
         self.clean = False
+        self._connections = 0
 
     async def handle(self, request):
+        # TODO: Share information with requester.
         logger.info("Start connection")
+        self._connections += 1
 
         name = request.match_info.get("name", "Anonymous")
         text = "Hello, " + name
@@ -77,7 +110,7 @@ class ExecutorMainLoop(Daemon):
 
     def cleanup(self, loop):
         logger.info("Cleaning Loop")
-        self.moderator.stop(loop)
+        self.moderator.stop()
 
     async def run(self):
         logger.info("Factoring executor")
@@ -89,7 +122,8 @@ class ExecutorMainLoop(Daemon):
         exception_topic = self.moderator.new_producer_topic("exception")
 
         query_topic = self.moderator.new_consumer_query(
-            "SELECT command.id, command.verb, deployment.topics, deployment.mainloop, executable.id, executable.object"
+            "SELECT command.id, command.verb, deployment.topics,"
+            "   deployment.mainloop, executable.id, executable.object"
             " FROM command C"
             " LEFT JOIN deployment D ON D.id = C.deployment_id"
             " LEFT JOIN executable E ON E.id = D.executable_id"
@@ -106,7 +140,7 @@ class ExecutorMainLoop(Daemon):
         )
 
         executor_task = asyncio.create_task(
-            executor(
+            deployer(
                 query_topic,
                 status_topic,
                 exception_topic,

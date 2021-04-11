@@ -14,10 +14,10 @@ class Moderator(object):
         self.zc = None
         self._topic_info = {}
 
-    def start(self):
+    def start(self) -> None:
         self.zc = Zeroconf()
 
-    def stop(self):
+    def stop(self) -> None:
         self.zc.unregister_all_services()
         self.zc.close()
 
@@ -30,11 +30,11 @@ class Moderator(object):
             return False
 
         o = urlparse(address)
-        hostip = socket.gethostbyname(o.hostname or socket.gethostname())
+        host_ip = socket.gethostbyname(o.hostname or socket.gethostname())
         info = ServiceInfo(
             "_http._tcp.local.",
             f"{topic_name}._http._tcp.local.",
-            addresses=[socket.inet_aton(hostip)],
+            addresses=[socket.inet_aton(host_ip)],
             port=int(o.port),
             properties=dict(etherware=True, **(properties or {})),
         )
@@ -58,5 +58,5 @@ class Moderator(object):
         self.start()
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exception_type, exception_value, traceback):
         self.stop()

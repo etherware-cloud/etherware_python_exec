@@ -3,6 +3,7 @@
 # Topic classes.
 #
 
+from abc import ABC, abstractmethod
 from urllib.parse import urlparse
 from etherware.exec.logging import logger, debug
 import socket
@@ -87,7 +88,7 @@ class WriteableTopic(TopicProcessor):
         await self.queue.put(message)
 
 
-class RedeableTopic(TopicProcessor):
+class ReadableTopic(TopicProcessor):
     @debug
     def __init__(self, *args, **kwargs):
         TopicProcessor.__init__(self, *args, **kwargs)
@@ -95,7 +96,7 @@ class RedeableTopic(TopicProcessor):
     @debug
     async def connection(self, ws, group=None):
         await ws.send_str(READY_SIGNAL)
-        logger.debug("Ready Signal sended")
+        logger.debug("Ready Signal sent")
 
     @debug
     async def processing(self, ws, msg, group=None):
@@ -121,14 +122,16 @@ class RedeableTopic(TopicProcessor):
         return data
 
 
-class TopicConnection:
+class TopicConnection(ABC):
     @debug
     def __init__(self, address):
         self.address = address
 
+    @abstractmethod
     async def start(self):
         raise NotImplementedError
 
+    @abstractmethod
     async def stop(self):
         logger.info("Trying to stop, but not implemented")
 
@@ -140,6 +143,7 @@ class TopicClient(TopicConnection):
         self.task = None
         self.ws = None
         self.ready = asyncio.Event()
+        self.topic_name = None
 
     @debug
     async def connect(self):
@@ -184,6 +188,18 @@ class TopicClient(TopicConnection):
             await self.task
             self.task = None
 
+    @abstractmethod
+    async def connection(self, ws):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def disconnection(self, ws):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def processing(self, ws, msg):
+        raise NotImplementedError
+
 
 class TopicServer(TopicConnection):
     @debug
@@ -194,6 +210,7 @@ class TopicServer(TopicConnection):
         self.hostname = None
         self.port = None
         self.sock_family = None
+        self.runner = None
 
     @debug
     def get_address(self):
@@ -226,6 +243,7 @@ class TopicServer(TopicConnection):
         o = urlparse(self.address)
         self.site = web.TCPSite(self.runner, o.hostname, o.port)
         await self.site.start()
+        # noinspection PyProtectedMember
         main_socket = self.site._server.sockets[0]
         self.scheme = o.scheme
         self.hostname, self.port, *_ = main_socket.getsockname()
@@ -233,7 +251,7 @@ class TopicServer(TopicConnection):
 
     @debug
     async def stop(self):
-        logger.info("Stoping runner")
+        logger.info("Stopping runner")
         await self.runner.cleanup()
         self.scheme = None
         self.hostname = None
@@ -266,6 +284,18 @@ class TopicServer(TopicConnection):
         await self.disconnection(ws)
         return ws
 
+    @abstractmethod
+    async def connection(self, ws, group):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def disconnection(self, ws):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def processing(self, ws, msg, group):
+        raise NotImplementedError
+
 
 class WriteableTopicClient(WriteableTopic, TopicClient):
     @debug
@@ -281,16 +311,15 @@ class WriteableTopicServer(WriteableTopic, TopicServer):
         TopicServer.__init__(self, address)
 
 
-class RedeableTopicClient(RedeableTopic, TopicClient):
+class ReadableTopicClient(ReadableTopic, TopicClient):
     @debug
     def __init__(self, storage, topic, address):
-        RedeableTopic.__init__(self, storage, topic)
+        ReadableTopic.__init__(self, storage, topic)
         TopicClient.__init__(self, address)
 
 
-class RedeableTopicServer(RedeableTopic, TopicServer):
+class ReadableTopicServer(ReadableTopic, TopicServer):
     @debug
     def __init__(self, storage, topic, address):
-        RedeableTopic.__init__(self, storage, topic)
+        ReadableTopic.__init__(self, storage, topic)
         TopicServer.__init__(self, address)
-

@@ -43,6 +43,7 @@ setup(
         "click",
         "aiohttp",
         "zeroconf",
+        "psutil"
     ],
     extras_require={
         "test": ["pytest", "pytest-click", "pytest-asyncio"],

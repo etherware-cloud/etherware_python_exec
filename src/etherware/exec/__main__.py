@@ -1,5 +1,5 @@
-from .exec.mainloop import MainLoop, MyDaemon
+from etherware.exec.core.mainloop import ExecutorMainLoop
 
 if __name__ == '__main__':
-    daemon = MainLoop()
+    daemon = ExecutorMainLoop()
     daemon.start()

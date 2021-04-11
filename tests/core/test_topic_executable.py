@@ -32,7 +32,11 @@ def main(test_topic):
     asyncio.run(loop(test_topic))
     """
     executable_consumer = Executable(
-        ["testing"], "main", 0, {}, source_consumer
+        {"test_topic": topic_node.get_readable("testing")},
+        "main",
+        0,
+        {},
+        source_consumer
     )
     executable_consumer.compile().setup()
 
@@ -48,7 +52,11 @@ def main(test_topic):
     asyncio.run(loop(test_topic))
     """
     executable_producer = Executable(
-        ["testing"], "main", 0, {}, source_producer
+        {"test_topic": topic_node.get_writeable("testing")},
+        "main",
+        0,
+        {},
+        source_producer
     )
     executable_producer.compile().setup()
 
@@ -60,4 +68,4 @@ def main(test_topic):
     executable_consumer.stop()
     executable_producer.stop()
 
-    # What do you spect from this test?
+    # What do you expect from this test?

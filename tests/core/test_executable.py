@@ -6,7 +6,7 @@ from etherware.exec.core.executable import Executable
 def test_executable_simple():
     t = Queue()
     e = Executable(
-        [t],
+        {"a": t},
         "main",
         0,
         {},
@@ -23,10 +23,31 @@ def main(a):
     assert t.get() == 1
 
 
+def test_executable_raise_exception():
+    t = Queue()
+    e = Executable(
+        {"a": t},
+        "main",
+        0,
+        {},
+        """
+def main(a):
+    a.put(1)
+    y = x
+""",
+    )
+    e.compile()
+    e.setup()
+    e.start()
+    e.wait()
+
+    assert t.get() == 1
+
+
 def test_executable_simple_parameter():
     t = Queue()
     e = Executable(
-        [t],
+        {"a": t},
         "main",
         0,
         {"r": 2},
@@ -46,7 +67,7 @@ def main(a, r=1):
 def test_executable_overwrite_parameter():
     t = Queue()
     e = Executable(
-        [t],
+        {"a": t},
         "main",
         0,
         {"r": 2},
@@ -66,7 +87,7 @@ def main(a, r=1):
 def test_executable_infinite_loop():
     t = Queue()
     e = Executable(
-        [t],
+        {"a": t},
         "main",
         0,
         {},

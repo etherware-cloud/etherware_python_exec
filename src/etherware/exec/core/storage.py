@@ -1,5 +1,5 @@
 import sqlite3
-from etherware.exec.logging import logger, debug
+from etherware.exec.logging import debug
 
 
 class IncrementalStorage:
@@ -19,6 +19,7 @@ class IncrementalStorage:
 class MemoryStorage(IncrementalStorage):
     @debug
     def __init__(self):
+        super().__init__()
         self._buffer = []
 
     @debug
@@ -39,6 +40,7 @@ class MemoryStorage(IncrementalStorage):
 
 class SqliteStorage(IncrementalStorage):
     def __init__(self, url=None):
+        super().__init__()
         self._conn = sqlite3.connect(url or ":memory:")
         cursor = self._conn.cursor()
         cursor.execute(
