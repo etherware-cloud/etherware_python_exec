@@ -34,11 +34,7 @@ def __main__(*args, __exception_topic__=None, **kwargs):
     try:
         {self._mainloop_name}(*args, **kwargs)
     except Exception as e:
-        print("ERROR ------------------")
-        if __exception_topic__ is not None:
-            __exception_topic__.put(e)
-        else:
-            print("Ignored exception but stop process")
+        __exception_topic__.put(e)
             """,
             "<string>",
             "exec",

@@ -24,9 +24,10 @@ def main(a):
 
 
 def test_executable_raise_exception():
+    e_q = Queue()
     t = Queue()
     e = Executable(
-        {"a": t},
+        {"a": t, "__exception_topic__": e_q},
         "main",
         0,
         {},
@@ -42,6 +43,7 @@ def main(a):
     e.wait()
 
     assert t.get() == 1
+    assert isinstance(e_q.get(), NameError)
 
 
 def test_executable_simple_parameter():

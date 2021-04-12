@@ -25,7 +25,7 @@ class Witness(object):
         self._topics = {}
         self._next_update = None
         self._update_lapse = update_lapse or 5000
-        self._timeout = timeout
+        self._timeout = (timeout or 2000)/1000
 
     def start(self):
         self._zc = Zeroconf(ip_version=IPVersion.All)
