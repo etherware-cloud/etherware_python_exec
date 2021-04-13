@@ -1,11 +1,14 @@
 import asyncio
 from etherware.exec.logging import logger
 from collections import AsyncIterator
-from .typing import Optional
+from .typing import Optional, TypeVar, Generic
+from .storage import IncrementalStorage
+
+T = TypeVar('T')
 
 
-class TopicQueue(AsyncIterator):
-    def __init__(self, storage, first: int = 0, default_group: Optional[dict] = None):
+class TopicQueue(AsyncIterator, Generic[T]):
+    def __init__(self, storage: IncrementalStorage, first: int = 0, default_group: Optional[str] = None):
         self._storage = storage
         self._first = first
         self._pointers = {}
@@ -16,14 +19,14 @@ class TopicQueue(AsyncIterator):
         if group not in self._pointers:
             self._pointers[group] = len(self._storage)
 
-    async def put(self, data):
+    async def put(self, data: T):
         self._storage.append(data)
 
         for group, cond in self._ready_cond.items():
             async with cond:
                 cond.notify_all()
 
-    def wait_condition(self, local_top):
+    def wait_condition(self, local_top: int):
         def inner():
             next_pos = len(self._storage)
             logger.debug(f"wait_condition {self} {local_top}<{next_pos}")
@@ -31,7 +34,7 @@ class TopicQueue(AsyncIterator):
 
         return inner
 
-    async def get(self, group=None):
+    async def get(self, group: Optional[str] = None) -> T:
         if group not in self._pointers:
             self.setup(group)
 
@@ -47,14 +50,14 @@ class TopicQueue(AsyncIterator):
         self._pointers[group] = global_top + 1
         return self._storage[global_top]
 
-    def empty(self, group=None):
+    def empty(self, group: Optional[str] = None):
         try:
             global_top = self._pointers[group]
             return global_top >= len(self._storage)
         except KeyError:
             return True
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"<TopicQueue[0x{id(self):x}] "
             f"_storage={self._storage} "
@@ -66,5 +69,5 @@ class TopicQueue(AsyncIterator):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> T:
         return await self.get(self._default_group)
