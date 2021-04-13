@@ -4,9 +4,11 @@ from etherware.exec.core.executable import Executable
 
 
 def test_executable_simple():
+    e_q = Queue()
     t = Queue()
     e = Executable(
         {"a": t},
+        e_q,
         "main",
         0,
         {},
@@ -27,7 +29,8 @@ def test_executable_raise_exception():
     e_q = Queue()
     t = Queue()
     e = Executable(
-        {"a": t, "__exception_topic__": e_q},
+        {"a": t},
+        e_q,
         "main",
         0,
         {},
@@ -47,9 +50,11 @@ def main(a):
 
 
 def test_executable_simple_parameter():
+    e_q = Queue()
     t = Queue()
     e = Executable(
         {"a": t},
+        e_q,
         "main",
         0,
         {"r": 2},
@@ -67,9 +72,11 @@ def main(a, r=1):
 
 
 def test_executable_overwrite_parameter():
+    e_q = Queue()
     t = Queue()
     e = Executable(
         {"a": t},
+        e_q,
         "main",
         0,
         {"r": 2},
@@ -87,9 +94,11 @@ def main(a, r=1):
 
 
 def test_executable_infinite_loop():
+    e_q = Queue()
     t = Queue()
     e = Executable(
         {"a": t},
+        e_q,
         "main",
         0,
         {},

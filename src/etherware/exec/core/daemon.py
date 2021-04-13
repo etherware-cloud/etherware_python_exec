@@ -11,7 +11,7 @@ import asyncio
 import functools
 from pathlib import Path
 from etherware.exec.logging import logger
-from etherware.exec.core.types import NullablePath, EventLoop, Union, List
+from etherware.exec.core.typing import NullablePath, EventLoop, Union, List
 
 
 NULL_DEVICE = Path("/dev/null")

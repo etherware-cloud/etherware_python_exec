@@ -1,4 +1,4 @@
-from etherware.exec.core.types import TopicDict, AnyStr
+from etherware.exec.core.typing import TopicDict, AnyStr, TopicType
 from collections import ChainMap
 from types import ModuleType
 from multiprocessing import Process
@@ -11,11 +11,13 @@ class NotMainModuleFoundError(Exception):
 class Executable:
     def __init__(self,
                  topics: TopicDict,
+                 exception_topic: TopicType,
                  mainloop_name: str,
                  optimization: int,
                  parameters: dict,
                  object_code: AnyStr):
         self._topics = topics
+        self._exception_topic = exception_topic
         self._optimization = optimization or 0
         self._mainloop_name = mainloop_name
         self._parameters = parameters
@@ -30,7 +32,7 @@ class Executable:
             f"""
 {self._object}
 
-def __main__(*args, __exception_topic__=None, **kwargs):
+def __main__(*args, **kwargs):
     try:
         {self._mainloop_name}(*args, **kwargs)
     except Exception as e:
@@ -46,8 +48,12 @@ def __main__(*args, __exception_topic__=None, **kwargs):
     def setup(self):
         # Retrieve local instances
         exec(self._compiled, {}, self._module.__dict__)
-        # Convert local instances to global instances
+        # Make imports visible
         exec(self._compiled, self._module.__dict__, self._module.__dict__)
+        # Add exception queue
+        exec(self._compiled,
+             {**self._module.__dict__, "__exception_topic__": self._exception_topic},
+             self._module.__dict__)
         # Retrieve main loop
         self._mainloop = getattr(self._module, "__main__")
 

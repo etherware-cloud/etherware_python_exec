@@ -19,11 +19,11 @@ def topic():
 @click.option("-t", "--timeout", default=5)
 def topic_list(timeout):
     click.echo("List local topics")
-    w = Witness()
+    w = Witness(timeout=timeout)
 
     click.echo("Searching for topics...")
     w.start()
-    ts = w.list_topics(timeout=timeout)
+    ts = w.list_topics()
     w.stop()
 
     click.echo("Topics found:")

@@ -1,6 +1,4 @@
 import pytest
-import asyncio
-from etherware.exec.logging import logger
 from etherware.exec.core.storage import SqliteStorage
 from etherware.exec.core.witness import Witness
 from etherware.exec.core.moderator import Moderator

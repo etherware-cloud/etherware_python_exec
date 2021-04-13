@@ -4,7 +4,6 @@ from etherware.exec.core import Executable
 from etherware.exec.core import Moderator
 from etherware.exec.core.storage import SqliteStorage
 from etherware.exec.core.topic_node import TopicNode
-from etherware.exec.core.witness import Witness
 
 
 @pytest.fixture
@@ -18,7 +17,9 @@ async def topic_node():
 @pytest.mark.asyncio
 async def test_simple_producer_consumer(topic_node):
     topic_node.add_topic("testing")
+    topic_node.add_topic("exception")
     await topic_node.start("testing")
+    await topic_node.start("exception")
 
     source_consumer = """
 import asyncio
@@ -33,6 +34,7 @@ def main(test_topic):
     """
     executable_consumer = Executable(
         {"test_topic": topic_node.get_readable("testing")},
+        topic_node.get_readable("exception"),
         "main",
         0,
         {},
@@ -53,6 +55,7 @@ def main(test_topic):
     """
     executable_producer = Executable(
         {"test_topic": topic_node.get_writeable("testing")},
+        topic_node.get_readable("exception"),
         "main",
         0,
         {},

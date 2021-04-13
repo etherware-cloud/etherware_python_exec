@@ -1,5 +1,4 @@
 from .net import get_ip_address
-from .storage import SqliteStorage
 from .topic_processor import WriteableTopicServer, ReadableTopicServer
 
 

@@ -3,7 +3,7 @@
 # Mainloop.
 #
 
-from etherware.exec.core.types import List, Tuple
+from etherware.exec.core.typing import List, Tuple
 from etherware.exec.logging import logger
 from .daemon import Daemon
 from .moderator import Moderator
@@ -11,9 +11,9 @@ from .witness import Witness, NotTopicAvailableError
 from .executable import Executable
 from aiohttp import web
 from functools import partial
-from .topic_node import TopicNode
 from .topic_processor import WriteableTopicClient, ReadableTopicClient
 from .storage import MemoryStorage
+from .topic_queue import TopicQueue
 
 import asyncio
 
@@ -49,13 +49,13 @@ class TopicWrapper:
 
 
 async def deployer(
-    query_topic,
-    status_topic,
-    exception_topic,
+    query_topic: TopicQueue,
+    status_topic: TopicQueue,
+    exception_topic: TopicQueue,
 ):
     executables = []
 
-    for (
+    async for (
         c_id,
         c_verb,
         c_parameters,
@@ -70,22 +70,21 @@ async def deployer(
         put_status = partial(
             status_topic.put, command_id=c_id, received=c_verb, over=e_id
         )
-        put_exception = partial(
-            exception_topic.put, command_id=c_id, received=c_verb, over=e_id
-        )
+        # exception_shell =
+        # TopicQueueShell(exception_topic, default_data=dict(command_id=c_id, received=c_verb, over=e_id))
 
-        put_status(message="Assigning Topics")
+        await put_status(message="Assigning Topics")
 
         topics = TopicWrapper()
 
         topics.connect_to_topic_servers(d_topics)
 
-        put_status(message="Building Executables")
+        await put_status(message="Building Executables")
 
-        deployed = Executable(topics.topics(), d_mainloop, d_optimization, d_parameters, e_object)
+        deployed = Executable(topics.topics(), exception_topic, d_mainloop, d_optimization, d_parameters, e_object)
         executables.append(deployed)
 
-        put_status(message="Starting")
+        await put_status(message="Starting")
         deployed.start()
 
 

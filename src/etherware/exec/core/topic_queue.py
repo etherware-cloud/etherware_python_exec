@@ -1,15 +1,18 @@
 import asyncio
 from etherware.exec.logging import logger
+from collections import AsyncIterator
+from .typing import Optional
 
 
-class TopicQueue:
-    def __init__(self, storage, first=0):
+class TopicQueue(AsyncIterator):
+    def __init__(self, storage, first: int = 0, default_group: Optional[dict] = None):
         self._storage = storage
         self._first = first
         self._pointers = {}
         self._ready_cond = {}
+        self._default_group = default_group or None
 
-    def setup(self, group=None):
+    def setup(self, group: Optional[str] = None):
         if group not in self._pointers:
             self._pointers[group] = len(self._storage)
 
@@ -59,3 +62,9 @@ class TopicQueue:
             f"_pointers={self._pointers} "
             f"_ready_cond={self._ready_cond}>"
         )
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        return await self.get(self._default_group)
