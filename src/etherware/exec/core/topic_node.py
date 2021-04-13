@@ -2,7 +2,7 @@ from .net import get_ip_address
 from .topic_processor import WriteableTopicServer, ReadableTopicServer
 from .moderator import Moderator
 from .storage import IncrementalStorage
-from .typing import Type, Optional, TracebackType
+from .typing import Type, Optional, TracebackType, List
 
 
 class NotTopicError(Exception):
@@ -17,13 +17,13 @@ class TopicNode:
         self._topic_counter = {}
         self._stock_counter = 0
 
-    async def loop(self, readable, writeable):
+    async def loop(self, readable: ReadableTopicServer, writeable: WriteableTopicServer):
         while True:
             data = await readable.get()
             await writeable.put(data)
             self._stock_counter += 1
 
-    def _get_topics(self, topic_name: Optional[str] = None):
+    def _get_topics(self, topic_name: Optional[str] = None) -> List[str]:
         return (topic_name and [topic_name]) or self._topics.keys()
 
     async def start(self, topic_name: Optional[str] = None):
@@ -40,7 +40,7 @@ class TopicNode:
             await self._topics[topic_name][0].stop()
             await self._topics[topic_name][1].stop()
 
-    def add_topic(self, topic_name: str, interface=None):
+    def add_topic(self, topic_name: str, interface=None) -> bool:
         if topic_name in self._topics:
             self._topic_counter[topic_name] += 1
             return False
@@ -65,7 +65,7 @@ class TopicNode:
         self._topic_counter[topic_name] = 1
         return True
 
-    def get_readable(self, topic_name: str):
+    def get_readable(self, topic_name: str) -> ReadableTopicServer:
         try:
             topic = self._topics[topic_name]
         except KeyError:
@@ -73,7 +73,7 @@ class TopicNode:
         else:
             return topic[0]
 
-    def get_writeable(self, topic_name: str):
+    def get_writeable(self, topic_name: str) -> WriteableTopicServer:
         try:
             topic = self._topics[topic_name]
         except KeyError:
@@ -81,7 +81,7 @@ class TopicNode:
         else:
             return topic[1]
 
-    async def del_topic(self, topic_name: str):
+    async def del_topic(self, topic_name: str) -> bool:
         counter = self._topic_counter.get(topic_name, 0)
         if counter > 1:
             self._topic_counter[topic_name] -= 1
