@@ -7,6 +7,7 @@ from etherware.exec.logging import logger
 from zeroconf import ServiceInfo, Zeroconf
 import socket
 from urllib.parse import urlparse
+from .typing import Optional, Type, TracebackType
 
 
 class Moderator(object):
@@ -21,10 +22,10 @@ class Moderator(object):
         self.zc.unregister_all_services()
         self.zc.close()
 
-    def is_published(self, topic_name):
+    def is_published(self, topic_name: str):
         return topic_name in self._topic_info
 
-    def publish_topic(self, topic_name, address, properties=None):
+    def publish_topic(self, topic_name: str, address: str, properties: Optional[dict] = None):
         logger.info(f"Registering topic {topic_name}")
         if self.is_published(topic_name):
             return False
@@ -42,7 +43,7 @@ class Moderator(object):
         self._topic_info[topic_name] = info
         self.zc.register_service(info)
 
-    def unpublish_topic(self, topic_name):
+    def unpublish_topic(self, topic_name: str):
         logger.info(f"Unregistering topic {topic_name}")
         if not self.is_published(topic_name):
             return False
@@ -54,9 +55,9 @@ class Moderator(object):
         for topic in self._topic_info.keys():
             self.unpublish_topic(topic)
 
-    def __enter__(self):
+    def __enter__(self) -> 'Moderator':
         self.start()
         return self
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def __exit__(self, exception_type: Type[BaseException], exception_value: BaseException, traceback: TracebackType):
         self.stop()
