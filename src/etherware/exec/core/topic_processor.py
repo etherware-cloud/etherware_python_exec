@@ -10,9 +10,10 @@ import socket
 import asyncio
 import aiohttp
 import weakref
-from aiohttp import web, WSCloseCode
+from aiohttp import web, WSCloseCode, ClientWebSocketResponse
 from .topic_queue import TopicQueue
-
+from .storage import IncrementalStorage
+from .typing import Any, Optional
 
 CLOSE_SIGNAL = "-close-"
 READY_SIGNAL = "-ready-"
@@ -20,24 +21,24 @@ READY_SIGNAL = "-ready-"
 
 class TopicProcessor:
     @debug
-    def __init__(self, storage, topic_name):
+    def __init__(self, storage: IncrementalStorage, topic_name: str):
         self.topic_name = topic_name
         self.queue = TopicQueue(storage)
 
-    async def connection(self, ws, group):
+    async def connection(self, ws: web.WebSocketResponse, group: str):
         raise NotImplementedError
 
-    async def processing(self, ws, msg, group):
+    async def processing(self, ws: web.WebSocketResponse, msg: Any, group: str):
         raise NotImplementedError
 
-    async def disconnection(self, ws):
+    async def disconnection(self, ws: web.WebSocketResponse):
         raise NotImplementedError
 
     @debug
-    def setup(self, group=None):
+    def setup(self, group: Optional[str] = None):
         self.queue.setup(group=group)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"<{self.__class__.__name__}[0x{id(self):x}] "
             f"topic_name={self.topic_name} "
@@ -53,11 +54,11 @@ class WriteableTopic(TopicProcessor):
         self.ready = asyncio.Event()
 
     @debug
-    async def connection(self, ws, group=None):
+    async def connection(self, ws: web.WebSocketResponse, group: Optional[str] = None):
         self.queue.setup(group)
 
     @debug
-    async def processing(self, ws, msg, group=None):
+    async def processing(self, ws: web.WebSocketResponse, msg: Any, group: Optional[str] = None):
         if msg.data == CLOSE_SIGNAL:
             return False
         elif msg.data == READY_SIGNAL:
@@ -79,11 +80,11 @@ class WriteableTopic(TopicProcessor):
                     return True
 
     @debug
-    async def disconnection(self, ws):
+    async def disconnection(self, ws: web.WebSocketResponse):
         pass
 
     @debug
-    async def put(self, message):
+    async def put(self, message: Any):
         await self.ready.wait()
         await self.queue.put(message)
 
@@ -94,12 +95,12 @@ class ReadableTopic(TopicProcessor):
         TopicProcessor.__init__(self, *args, **kwargs)
 
     @debug
-    async def connection(self, ws, group=None):
+    async def connection(self, ws: web.WebSocketResponse, group: Optional[str] = None):
         await ws.send_str(READY_SIGNAL)
         logger.debug("Ready Signal sent")
 
     @debug
-    async def processing(self, ws, msg, group=None):
+    async def processing(self, ws: web.WebSocketResponse, msg: Any, group: Optional[str] = None):
         if msg.type == aiohttp.WSMsgType.TEXT:
             await self.queue.put(msg.data)
             await ws.send_str(READY_SIGNAL)
@@ -112,19 +113,19 @@ class ReadableTopic(TopicProcessor):
             return False
 
     @debug
-    async def disconnection(self, ws):
+    async def disconnection(self, ws: web.WebSocketResponse):
         if not ws.closed:
             await ws.send_str(CLOSE_SIGNAL)
 
     @debug
-    async def get(self, group=None):
+    async def get(self, group: Optional[str] = None) -> Any:
         data = await self.queue.get(group)
         return data
 
 
 class TopicConnection(ABC):
     @debug
-    def __init__(self, address):
+    def __init__(self, address: str):
         self.address = address
 
     @abstractmethod
@@ -138,13 +139,14 @@ class TopicConnection(ABC):
 
 class TopicClient(TopicConnection):
     @debug
-    def __init__(self, address):
+    def __init__(self, address: str):
         TopicConnection.__init__(self, address)
         self.task = None
         self.ws = None
         self.ready = asyncio.Event()
         self.topic_name = None
 
+    # noinspection PyUnresolvedReferences
     @debug
     async def connect(self):
         async with aiohttp.ClientSession() as session:
@@ -155,7 +157,6 @@ class TopicClient(TopicConnection):
                 await self.connection(ws)
 
                 async for msg in ws:
-
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         if not await self.processing(ws, msg):
                             await ws.close()
@@ -189,21 +190,21 @@ class TopicClient(TopicConnection):
             self.task = None
 
     @abstractmethod
-    async def connection(self, ws):
+    async def connection(self, ws: ClientWebSocketResponse):
         raise NotImplementedError
 
     @abstractmethod
-    async def disconnection(self, ws):
+    async def disconnection(self, ws: ClientWebSocketResponse):
         raise NotImplementedError
 
     @abstractmethod
-    async def processing(self, ws, msg):
+    async def processing(self, ws: ClientWebSocketResponse, msg: Any):
         raise NotImplementedError
 
 
 class TopicServer(TopicConnection):
     @debug
-    def __init__(self, address):
+    def __init__(self, address: str):
         TopicConnection.__init__(self, address)
         self.site = None
         self.scheme = None
@@ -213,7 +214,7 @@ class TopicServer(TopicConnection):
         self.runner = None
 
     @debug
-    def get_address(self):
+    def get_address(self) -> str:
         if self.scheme and self.hostname and self.port:
             if self.sock_family is socket.AF_INET:
                 return f"http://{self.hostname}:{self.port}"
@@ -224,7 +225,7 @@ class TopicServer(TopicConnection):
             return self.address
 
     @debug
-    async def on_shutdown(self, app):
+    async def on_shutdown(self, app: web.Application):
         for ws in set(app["websockets"]):
             await ws.close(
                 code=WSCloseCode.GOING_AWAY, message="Server Shutdown"
@@ -258,8 +259,9 @@ class TopicServer(TopicConnection):
         self.port = None
         self.sock_family = None
 
+    # noinspection PyUnresolvedReferences
     @debug
-    async def handler(self, request):
+    async def handler(self, request: web.Request):
         group = request.match_info.get("group")
         logger.debug(f"Group: {group or 'ROOT'}")
 
@@ -285,41 +287,41 @@ class TopicServer(TopicConnection):
         return ws
 
     @abstractmethod
-    async def connection(self, ws, group):
+    async def connection(self, ws: web.WebSocketResponse, group: str):
         raise NotImplementedError
 
     @abstractmethod
-    async def disconnection(self, ws):
+    async def disconnection(self, ws: web.WebSocketResponse):
         raise NotImplementedError
 
     @abstractmethod
-    async def processing(self, ws, msg, group):
+    async def processing(self, ws: web.WebSocketResponse, msg: Any, group: str):
         raise NotImplementedError
 
 
 class WriteableTopicClient(WriteableTopic, TopicClient):
     @debug
-    def __init__(self, storage, topic, address):
+    def __init__(self, storage: IncrementalStorage, topic: str, address: str):
         WriteableTopic.__init__(self, storage, topic)
         TopicClient.__init__(self, address)
 
 
 class WriteableTopicServer(WriteableTopic, TopicServer):
     @debug
-    def __init__(self, storage, topic, address):
+    def __init__(self, storage: IncrementalStorage, topic: str, address: str):
         WriteableTopic.__init__(self, storage, topic)
         TopicServer.__init__(self, address)
 
 
 class ReadableTopicClient(ReadableTopic, TopicClient):
     @debug
-    def __init__(self, storage, topic, address):
+    def __init__(self, storage: IncrementalStorage, topic: str, address: str):
         ReadableTopic.__init__(self, storage, topic)
         TopicClient.__init__(self, address)
 
 
 class ReadableTopicServer(ReadableTopic, TopicServer):
     @debug
-    def __init__(self, storage, topic, address):
+    def __init__(self, storage: IncrementalStorage, topic: str, address: str):
         ReadableTopic.__init__(self, storage, topic)
         TopicServer.__init__(self, address)
